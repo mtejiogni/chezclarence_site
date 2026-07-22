@@ -1,0 +1,35 @@
+# ──────────────────────────────────────────────────────────────
+# Sécurité de base pour un hébergement Apache mutualisé.
+# ──────────────────────────────────────────────────────────────
+
+# Empêche l'accès direct au fichier d'environnement
+<FilesMatch "^\.env">
+    Require all denied
+</FilesMatch>
+
+# Empêche le listing des dossiers
+Options -Indexes
+
+# Empêche l'exécution de PHP dans le dossier des fichiers uploadés (si utilisé en local)
+<IfModule mod_php.c>
+    <FilesMatch "\.(php|phtml)$">
+        <If "%{REQUEST_URI} =~ m#^/assets/#">
+            Require all denied
+        </If>
+    </FilesMatch>
+</IfModule>
+
+# Compression et cache basique pour les performances
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css application/javascript text/javascript image/svg+xml
+</IfModule>
+
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/svg+xml "access plus 1 month"
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+</IfModule>
+
+# Page d'erreur personnalisée
+ErrorDocument 404 /404.php

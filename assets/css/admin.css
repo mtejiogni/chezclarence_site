@@ -1,0 +1,199 @@
+/* ══════════════════════════════════════════════════════════════
+   admin.css — habillage du panneau d'administration.
+   Réutilise les variables de marque définies dans custom.css.
+   ══════════════════════════════════════════════════════════════ */
+
+body.admin-body{ background:#F4F5F7; font-family:'Inter', ui-sans-serif, system-ui, sans-serif; }
+
+/* ── Sidebar ───────────────────────────────────────────────── */
+.admin-sidebar{
+  width:260px; background:rgb(var(--ink)); color:#fff; position:fixed; inset:0 auto 0 0;
+  display:flex; flex-direction:column; z-index:45; transition:transform .3s ease;
+}
+.admin-sidebar-link{
+  display:flex; align-items:center; gap:12px; padding:11px 20px; color:rgba(255,255,255,.65);
+  font-weight:600; font-size:.875rem; border-left:3px solid transparent; transition:all .2s ease;
+}
+/* Largeur réservée pour l'icône : la mise en page reste alignée et propre
+   même si les polices Font Awesome ne se chargent pas (icône invisible
+   plutôt qu'un décalage de tout le texte). */
+.admin-sidebar-link i{ width:18px; flex-shrink:0; text-align:center; transition:transform .2s ease; }
+.admin-sidebar-link:hover i{ transform:scale(1.1); }
+.admin-sidebar-link:hover{ background:rgba(255,255,255,.06); color:#fff; }
+.admin-sidebar-link.active{ background:rgba(234,88,12,.14); color:#fff; border-left-color:rgb(var(--brand-600)); }
+.admin-sidebar-link.active i{ color:rgb(var(--brand-500)); }
+
+/* Le bouton de déconnexion est un <button> dans un <form>, pas un <a> :
+   on annule les styles par défaut du navigateur pour qu'il soit identique
+   visuellement aux autres liens de la sidebar. */
+button.admin-sidebar-link{
+  background:none; border:none; border-left:3px solid transparent; width:100%;
+  cursor:pointer; font-family:inherit; text-align:left;
+}
+
+/* Défilement discret de la navigation si elle dépasse la hauteur d'écran */
+.admin-sidebar-nav{ scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.15) transparent; }
+.admin-sidebar-nav::-webkit-scrollbar{ width:6px; }
+.admin-sidebar-nav::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.15); border-radius:999px; }
+.admin-sidebar-nav::-webkit-scrollbar-thumb:hover{ background:rgba(255,255,255,.28); }
+
+.admin-main{ margin-left:260px; min-height:100vh; }
+
+/* Voile sombre derrière la sidebar sur mobile/tablette, pour fermer au clic
+   à l'extérieur et bien indiquer qu'elle flotte au-dessus du contenu. */
+.admin-sidebar-backdrop{
+  position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:44;
+  opacity:0; pointer-events:none; transition:opacity .25s ease;
+}
+.admin-sidebar-backdrop.show{ opacity:1; pointer-events:auto; }
+
+@media (max-width:1023px){
+  .admin-sidebar{ transform:translateX(-100%); }
+  .admin-sidebar.open{ transform:translateX(0); }
+  .admin-main{ margin-left:0; }
+}
+@media (min-width:1024px){
+  .admin-sidebar-backdrop{ display:none; }
+}
+
+/* ── Cartes / tableaux ─────────────────────────────────────── */
+.admin-card{ background:#fff; border:1px solid #E5E7EB; border-radius:1rem; }
+.admin-table{ width:100%; border-collapse:collapse; font-size:.875rem; }
+.admin-table th{ text-align:left; padding:.85rem 1rem; color:#6B7280; font-weight:700; font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; border-bottom:1px solid #E5E7EB; }
+.admin-table td{ padding:.85rem 1rem; border-bottom:1px solid #F3F4F6; vertical-align:middle; }
+.admin-table tr:last-child td{ border-bottom:none; }
+.admin-table tr:hover td{ background:#FAFAFA; }
+
+.badge{ display:inline-flex; align-items:center; gap:5px; font-size:.72rem; font-weight:700; padding:3px 10px; border-radius:999px; }
+.badge-success{ background:rgb(var(--success-50)); color:rgb(var(--success-700)); }
+.badge-muted{ background:#F3F4F6; color:#6B7280; }
+.badge-brand{ background:rgb(var(--brand-50)); color:rgb(var(--brand-700)); }
+.badge-info{ background:#EFF6FF; color:#1D4ED8; }
+
+.icon-btn{ width:34px; height:34px; display:grid; place-items:center; border-radius:.6rem; transition:all .2s ease; }
+.icon-btn-edit{ background:#EFF6FF; color:#2563EB; }
+.icon-btn-edit:hover{ background:#2563EB; color:#fff; }
+.icon-btn-delete{ background:#FEF2F2; color:#DC2626; }
+.icon-btn-delete:hover{ background:#DC2626; color:#fff; }
+
+/* ── Formulaires ───────────────────────────────────────────── */
+.admin-label{ display:block; font-size:.82rem; font-weight:700; color:#374151; margin-bottom:.35rem; }
+.admin-input, .admin-select, .admin-textarea{
+  width:100%; border:1.5px solid #E5E7EB; border-radius:.6rem; padding:.65rem .9rem; font-size:.875rem;
+  transition:border-color .2s ease, box-shadow .2s ease; background:#fff;
+}
+.admin-input:focus, .admin-select:focus, .admin-textarea:focus{
+  outline:none; border-color:rgb(var(--brand-600)); box-shadow:0 0 0 3px rgb(var(--brand-100));
+}
+.admin-hint{ font-size:.75rem; color:#9CA3AF; margin-top:.3rem; }
+
+.admin-thumb{ width:46px; height:46px; border-radius:.5rem; object-fit:cover; background:#F3F4F6; }
+
+.stat-card{ background:#fff; border:1px solid #E5E7EB; border-radius:1rem; padding:1.25rem; }
+.stat-card .num{ font-size:1.9rem; font-weight:800; color:rgb(var(--ink)); }
+
+.sortable-handle{ cursor:grab; color:#D1D5DB; }
+
+/* ── Cartes stats cliquables (dashboard + en-tête de liste) ──── */
+.stat-card{ transition:transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
+a.stat-card:hover{ transform:translateY(-3px); box-shadow:0 14px 30px -16px rgba(17,17,17,.25); border-color:rgb(var(--brand-200)); }
+
+.stat-mini{
+  display:flex; align-items:center; gap:10px; background:#fff; border:1px solid #E5E7EB;
+  border-radius:.85rem; padding:.75rem 1rem;
+}
+.stat-mini .num{ font-size:1.25rem; font-weight:800; color:rgb(var(--ink)); line-height:1; }
+.stat-mini .label{ font-size:.72rem; color:#6B7280; font-weight:600; }
+
+/* ── Barre de filtre (recherche + statut) ─────────────────────
+   Utilisée en tête de chaque liste avec [data-table-filter]     */
+.filter-bar{
+  display:flex; flex-wrap:wrap; gap:.75rem; align-items:center;
+  background:#fff; border:1px solid #E5E7EB; border-radius:1rem; padding:1rem 1.15rem;
+}
+.filter-search-wrap{ position:relative; flex:1 1 220px; min-width:200px; }
+.filter-search-wrap i{ position:absolute; left:14px; top:50%; transform:translateY(-50%); color:#9CA3AF; font-size:.8rem; }
+.filter-search-wrap input{ padding-left:2.4rem; }
+.filter-count-pill{
+  display:inline-flex; align-items:center; gap:6px; font-size:.75rem; font-weight:700;
+  color:#6B7280; background:#F3F4F6; border-radius:999px; padding:.4rem .8rem; white-space:nowrap;
+}
+.filter-count-pill b{ color:rgb(var(--ink)); }
+
+/* ── En-têtes de tableau triables ─────────────────────────────── */
+.th-sortable{ cursor:pointer; user-select:none; transition:color .15s ease; }
+.th-sortable:hover{ color:rgb(var(--brand-600)); }
+
+/* Ligne qui disparaît en douceur au filtrage plutôt que d'un coup */
+.admin-table tr[data-row]{ transition:opacity .15s ease; }
+
+/* ── Aperçu d'image dans les formulaires ──────────────────────── */
+.image-preview-frame{
+  position:relative; width:96px; height:96px; border-radius:.85rem; overflow:hidden;
+  border:1.5px dashed #D1D5DB; background:#F9FAFB; display:grid; place-items:center;
+}
+.image-preview-frame img{ width:100%; height:100%; object-fit:cover; }
+.image-preview-badge{
+  display:inline-flex; align-items:center; gap:5px; font-size:.72rem; font-weight:700;
+  color:rgb(var(--success-700)); background:rgb(var(--success-50)); border-radius:999px; padding:.3rem .7rem; margin-top:.5rem;
+}
+
+/* ── Bloc d'aperçu du slug (formulaire service) ──────────────── */
+.slug-preview{
+  display:flex; align-items:center; gap:6px; font-family:'Space Mono', 'Courier New', monospace;
+  font-size:.78rem; color:rgb(var(--brand-700)); background:rgb(var(--brand-50)); border:1px solid rgb(var(--brand-100));
+  border-radius:.6rem; padding:.5rem .75rem; margin-top:.4rem; overflow-x:auto; white-space:nowrap;
+}
+
+/* ── Bouton afficher/masquer mot de passe ─────────────────────── */
+.password-field-wrap{ position:relative; }
+.password-toggle-btn{
+  position:absolute; right:12px; top:50%; transform:translateY(-50%); color:#9CA3AF;
+  background:none; border:none; cursor:pointer; padding:4px; transition:color .15s ease;
+}
+.password-toggle-btn:hover{ color:rgb(var(--ink)); }
+
+/* ── Empty state plus engageant ───────────────────────────────── */
+.empty-state{ text-align:center; padding:3.5rem 1.5rem; color:#9CA3AF; }
+.empty-state i{ font-size:2.25rem; color:rgb(var(--brand-200)); margin-bottom:.75rem; display:block; }
+.empty-state p{ font-size:.9rem; }
+
+/* ── Petite apparition douce pour les cartes au chargement ────── */
+@keyframes admin-fade-up{ from{ opacity:0; transform:translateY(6px); } to{ opacity:1; transform:translateY(0); } }
+.admin-card, .stat-card, .stat-mini, .filter-bar{ animation:admin-fade-up .35s ease both; }
+
+@media (prefers-reduced-motion: reduce){
+  .admin-card, .stat-card, .stat-mini, .filter-bar{ animation:none; }
+}
+
+/* ── Sélecteur d'icônes Font Awesome ───────────────────────────── */
+.icon-field-wrap{ display:flex; align-items:stretch; gap:.5rem; }
+.icon-field-preview{
+  width:46px; flex-shrink:0; border:1.5px solid #E5E7EB; border-radius:.6rem;
+  display:grid; place-items:center; font-size:1.15rem; color:rgb(var(--brand-600)); background:#F9FAFB;
+}
+.icon-field-wrap .admin-input{ flex:1; }
+.icon-picker-btn{
+  flex-shrink:0; display:inline-flex; align-items:center; gap:6px; padding:0 1rem;
+  border:1.5px solid #E5E7EB; border-radius:.6rem; font-size:.82rem; font-weight:700;
+  color:rgb(var(--ink)); background:#fff; transition:all .15s ease; white-space:nowrap; cursor:pointer;
+}
+.icon-picker-btn:hover{ border-color:rgb(var(--brand-600)); color:rgb(var(--brand-600)); background:rgb(var(--brand-50)); }
+
+.icon-picker-panel{
+  position:relative; margin-top:.6rem; border:1.5px solid #E5E7EB; border-radius:.85rem;
+  padding:.85rem; background:#fff; box-shadow:0 16px 36px -18px rgba(17,17,17,.28); z-index:20;
+}
+.icon-picker-grid{
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(52px,1fr)); gap:.4rem;
+  max-height:230px; overflow-y:auto; margin-top:.65rem;
+}
+.icon-picker-cell{
+  display:flex; align-items:center; justify-content:center; padding:.65rem .3rem;
+  border-radius:.55rem; border:1.5px solid transparent; cursor:pointer; transition:all .12s ease; background:#F9FAFB;
+}
+.icon-picker-cell:hover{ background:rgb(var(--brand-50)); border-color:rgb(var(--brand-200)); transform:translateY(-1px); }
+.icon-picker-cell.is-selected{ background:rgb(var(--brand-600)); border-color:rgb(var(--brand-600)); }
+.icon-picker-cell.is-selected i{ color:#fff; }
+.icon-picker-cell i{ font-size:1.05rem; color:rgb(var(--ink)); }
+.icon-picker-empty{ text-align:center; padding:1.5rem; color:#9CA3AF; font-size:.82rem; }

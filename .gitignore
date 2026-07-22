@@ -1,0 +1,8 @@
+/node_modules
+/assets/vendor
+/assets/css/tailwind.css
+/uploads/**/*
+!/uploads/**/.gitkeep
+.env
+.DS_Store
+npm-debug.log
