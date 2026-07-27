@@ -1,5 +1,14 @@
 <?php
 require_once __DIR__ . '/includes/functions.php';
+
+// Redirige automatiquement vers l'assistant d'installation tant que le
+// site n'a pas encore de base de données et compte administrateur.
+if (!site_est_installe()) {
+    header('Location: admin/install.php');
+    exit;
+}
+
+
 $p = get_parametres();
 $current = '';
 $page_title = 'Page introuvable — ' . $p['nom_restaurant'];

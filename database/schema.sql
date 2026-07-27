@@ -15,8 +15,9 @@
 --      administrateur (aucun mot de passe n'est pré-rempli dans
 --      ce script, pour des raisons de sécurité).
 -- ══════════════════════════════════════════════════════════════
+DROP DATABASE IF EXISTS chezclarence_site;
 
-CREATE DATABASE IF NOT EXISTS chezclarence_site
+CREATE DATABASE chezclarence_site
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 USE chezclarence_site;
@@ -46,6 +47,46 @@ CREATE TABLE administrateurs (
   updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 -- Volontairement vide : le premier compte est créé via /admin/install.php
+
+-- ──────────────────────────────────────────────────────────────
+-- Jetons de réinitialisation de mot de passe (lien envoyé par e-mail)
+-- ──────────────────────────────────────────────────────────────
+-- Le jeton lui-même n'est jamais stocké en clair (même principe que
+-- pour les mots de passe) : seul son hachage SHA-256 est en base. Un
+-- jeton compromis dans une fuite de base ne serait donc pas
+-- directement réutilisable.
+DROP TABLE IF EXISTS reinitialisations_mot_de_passe;
+CREATE TABLE reinitialisations_mot_de_passe (
+  id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  admin_id    INT UNSIGNED NOT NULL,
+  token_hash  VARCHAR(64)  NOT NULL COMMENT 'sha256 du jeton envoyé par e-mail',
+  expire_le   DATETIME     NOT NULL,
+  utilise     TINYINT(1)   NOT NULL DEFAULT 0,
+  created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_token_hash (token_hash),
+  KEY idx_admin_id (admin_id),
+  CONSTRAINT fk_reinit_admin FOREIGN KEY (admin_id) REFERENCES administrateurs(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ──────────────────────────────────────────────────────────────
+-- Limitation des tentatives (connexion + demandes de réinitialisation)
+-- ──────────────────────────────────────────────────────────────
+-- Une seule table réutilisable pour les deux contextes, distingués
+-- par la colonne "contexte". Compte les échecs par e-mail ET par
+-- adresse IP séparément (une IP partagée — bureau, box familiale —
+-- ne doit pas bloquer instantanément tout le monde après une seule
+-- erreur d'un des occupants).
+DROP TABLE IF EXISTS limitation_tentatives;
+CREATE TABLE limitation_tentatives (
+  id                  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  contexte            VARCHAR(30)  NOT NULL COMMENT 'connexion | reinitialisation',
+  identifiant         VARCHAR(150) NOT NULL COMMENT 'e-mail (en minuscules) ou adresse IP',
+  type                ENUM('email','ip') NOT NULL,
+  tentatives          INT UNSIGNED NOT NULL DEFAULT 1,
+  derniere_tentative  DATETIME     NOT NULL,
+  bloque_jusqua       DATETIME     NULL,
+  UNIQUE KEY uniq_cle (contexte, identifiant, type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ──────────────────────────────────────────────────────────────
 -- Paramètres généraux du restaurant (ligne unique)

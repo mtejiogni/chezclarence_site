@@ -12,17 +12,25 @@ if (admin_is_logged_in()) {
 
 $erreur = null;
 $flash = flash_get();
+$blocageRestant = limitation_est_bloque('connexion');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
     $email = trim($_POST['email'] ?? '');
     $motDePasse = $_POST['mot_de_passe'] ?? '';
 
-    if (admin_attempt_login($email, $motDePasse)) {
+    $blocage = limitation_est_bloque('connexion', $email);
+
+    if ($blocage !== null) {
+        $erreur = 'Trop de tentatives incorrectes. Réessayez dans ' . ceil($blocage / 60) . ' minute(s).';
+    } elseif (admin_attempt_login($email, $motDePasse)) {
+        limitation_reinitialiser('connexion', $email);
         header('Location: dashboard.php');
         exit;
+    } else {
+        limitation_enregistrer_echec('connexion', $email, 5, 15, 15);
+        $erreur = 'E-mail ou mot de passe incorrect.';
     }
-    $erreur = 'E-mail ou mot de passe incorrect.';
 }
 
 $p = get_parametres();
@@ -42,15 +50,11 @@ $p = get_parametres();
     html, body { height: 100%; }
     .login-shell { min-height: 100vh; }
 
-    /* Panneau de marque (visible à partir de lg) */
     .login-brand-panel {
       position: relative;
       overflow: hidden;
       background: linear-gradient(160deg, rgb(var(--ink)) 0%, #1a1a1a 55%, rgb(var(--ink)) 100%);
     }
-    /* Taille fluide plutôt que des paliers fixes par breakpoint : évite
-       qu'un titre tienne large à 1280px mais déborde/retombe mal juste
-       en dessous, à 1024px, là où le panneau est le plus étroit. */
     .login-heading {
       font-size: clamp(1.65rem, 2.4vw + 1rem, 2.75rem);
       line-height: 1.15;
@@ -90,7 +94,6 @@ $p = get_parametres();
       color: rgb(var(--brand-400));
     }
 
-    /* Champs avec icône intégrée */
     .login-field { position: relative; }
     .login-field-icon {
       position: absolute;
@@ -107,7 +110,6 @@ $p = get_parametres();
     .login-field:focus-within .login-field-icon { color: rgb(var(--brand-600)); }
     .password-field-wrap .login-field-input { padding-right: 2.6rem; }
 
-    /* Avertissement Verr. Maj */
     .capslock-warning {
       display: none;
       align-items: center;
@@ -123,7 +125,6 @@ $p = get_parametres();
     }
     .capslock-warning.show { display: flex; }
 
-    /* Secousse en cas d'erreur */
     @keyframes login-shake {
       10%, 90% { transform: translateX(-1px); }
       20%, 80% { transform: translateX(2px); }
@@ -132,7 +133,6 @@ $p = get_parametres();
     }
     .login-shake { animation: login-shake 0.45s cubic-bezier(.36,.07,.19,.97) both; }
 
-    /* Bouton en état de chargement */
     .login-submit-btn[disabled] { opacity: 0.75; cursor: not-allowed; }
 
     @media (prefers-reduced-motion: reduce) {
@@ -144,7 +144,6 @@ $p = get_parametres();
 
 <div class="login-shell grid lg:grid-cols-2">
 
-  <!-- ══════════════ Panneau de marque (desktop) ══════════════ -->
   <div class="login-brand-panel hidden lg:flex flex-col justify-between p-8 lg:p-10 xl:p-12 text-white relative">
     <span class="login-brand-orb w-64 h-64 -top-16 -right-16 float-2"></span>
     <span class="login-brand-orb w-40 h-40 bottom-10 -left-10 float-3"></span>
@@ -194,11 +193,9 @@ $p = get_parametres();
     <p class="relative z-10 text-white/30 text-xs">© <?= date('Y') ?> <?= e($p['nom_restaurant']) ?>. Back-office privé.</p>
   </div>
 
-  <!-- ══════════════ Formulaire de connexion ══════════════ -->
   <div class="flex items-center justify-center p-4 sm:p-6 lg:p-10">
     <div class="w-full max-w-md">
 
-      <!-- En-tête compact, mobile uniquement -->
       <div class="text-center mb-6 lg:hidden">
         <?php if (!empty($p['logo'])): ?>
           <img src="<?= e(photo_url($p['logo'])) ?>" class="w-16 h-16 rounded-2xl object-cover mx-auto mb-3 ring-2 ring-brand-600/30" alt="">
@@ -224,6 +221,11 @@ $p = get_parametres();
           <div class="mb-5 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-4 flex items-start gap-2">
             <i class="fa-solid fa-circle-exclamation mt-0.5 shrink-0"></i> <span class="min-w-0 break-words"><?= e($erreur) ?></span>
           </div>
+        <?php elseif ($blocageRestant !== null): ?>
+          <div class="mb-5 bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-xl p-4 flex items-start gap-2">
+            <i class="fa-solid fa-clock mt-0.5 shrink-0"></i>
+            <span class="min-w-0 break-words">Trop de tentatives récentes depuis cet appareil. Réessayez dans <?= ceil($blocageRestant / 60) ?> minute(s).</span>
+          </div>
         <?php endif; ?>
 
         <form method="post" class="space-y-4" id="login-form">
@@ -238,8 +240,11 @@ $p = get_parametres();
           </div>
 
           <div>
-            <label class="admin-label">Mot de passe</label>
-            <div class="password-field-wrap login-field">
+            <div class="flex items-center justify-between">
+              <label class="admin-label mb-0">Mot de passe</label>
+              <a href="mot-de-passe-oublie.php" class="text-xs font-semibold text-brand-600 hover:text-brand-700">Mot de passe oublié ?</a>
+            </div>
+            <div class="password-field-wrap login-field mt-1.5">
               <input type="password" name="mot_de_passe" id="login-password" required class="admin-input login-field-input" placeholder="••••••••">
               <i class="fa-solid fa-lock login-field-icon"></i>
               <button type="button" class="password-toggle-btn" data-toggle-password="#login-password" aria-label="Afficher le mot de passe"><i class="fa-solid fa-eye"></i></button>
@@ -264,7 +269,6 @@ $p = get_parametres();
 
 <script src="../assets/js/admin.js"></script>
 <script>
-  // Avertissement de verrouillage majuscules pendant la saisie du mot de passe
   (function () {
     var pwd = document.getElementById('login-password');
     var warning = document.getElementById('capslock-warning');
@@ -279,7 +283,6 @@ $p = get_parametres();
     pwd.addEventListener('blur', function () { warning.classList.remove('show'); });
   })();
 
-  // État de chargement au moment de la soumission
   (function () {
     var form = document.getElementById('login-form');
     if (!form) return;

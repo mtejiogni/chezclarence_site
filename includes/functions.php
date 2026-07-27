@@ -273,3 +273,23 @@ function get_valeurs(): array
         return [];
     }
 }
+
+/**
+ * Vérifie si le site a été correctement installé : la base de données
+ * est joignable, et au moins un compte administrateur existe.
+ * Utilisée par index.php pour rediriger automatiquement vers l'assistant
+ * d'installation tant que ce n'est pas le cas.
+ */
+function site_est_installe(): bool
+{
+    try {
+        $pdo = get_pdo();
+        $compte = $pdo->query('SELECT COUNT(*) FROM administrateurs')->fetchColumn();
+        return ((int) $compte) > 0;
+    } catch (Throwable $ex) {
+        // Base injoignable, .env mal configuré, ou schema.sql pas encore
+        // importé (table "administrateurs" inexistante) : dans tous les
+        // cas, le site n'est pas installé.
+        return false;
+    }
+}

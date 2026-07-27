@@ -214,3 +214,157 @@ function flash_get(): ?array
     unset($_SESSION['flash']);
     return $flash;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   LIMITATION DES TENTATIVES (connexion + demandes de réinitialisation)
+   ═══════════════════════════════════════════════════════════════ */
+
+/** Adresse IP du visiteur actuel. */
+function client_ip(): string
+{
+    return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+}
+
+/**
+ * Renvoie le nombre de secondes restantes avant déblocage pour le
+ * contexte donné ('connexion' ou 'reinitialisation'), ou null si rien
+ * n'est bloqué. Vérifie à la fois l'e-mail visé (si fourni) et l'IP
+ * du visiteur — le blocage le plus long des deux s'applique.
+ */
+function limitation_est_bloque(string $contexte, ?string $email = null): ?int
+{
+    $valeurs = [limitation_bloque_depuis($contexte, client_ip(), 'ip')];
+    if ($email) {
+        $valeurs[] = limitation_bloque_depuis($contexte, mb_strtolower($email), 'email');
+    }
+    $valeurs = array_filter($valeurs, fn ($v) => $v !== null);
+    return $valeurs ? max($valeurs) : null;
+}
+
+function limitation_bloque_depuis(string $contexte, string $identifiant, string $type): ?int
+{
+    $stmt = get_pdo()->prepare('
+        SELECT bloque_jusqua FROM limitation_tentatives
+        WHERE contexte = :c AND identifiant = :id AND type = :type
+    ');
+    $stmt->execute(['c' => $contexte, 'id' => $identifiant, 'type' => $type]);
+    $bloqueJusqua = $stmt->fetchColumn();
+
+    if (!$bloqueJusqua) {
+        return null;
+    }
+    $restant = strtotime($bloqueJusqua) - time();
+    return $restant > 0 ? $restant : null;
+}
+
+/**
+ * Enregistre une tentative échouée pour l'IP courante (et l'e-mail visé,
+ * si fourni) — déclenche un blocage temporaire une fois le seuil atteint.
+ * La fenêtre glisse automatiquement : si la dernière tentative remonte
+ * à plus de $blocageMinutes, le compteur repart de zéro plutôt que de
+ * s'accumuler indéfiniment sur plusieurs jours.
+ */
+function limitation_enregistrer_echec(
+    string $contexte,
+    ?string $email,
+    int $seuilEmail,
+    int $seuilIp,
+    int $blocageMinutes = 15
+): void {
+    $pdo = get_pdo();
+    $cibles = [[client_ip(), 'ip', $seuilIp]];
+    if ($email) {
+        $cibles[] = [mb_strtolower($email), 'email', $seuilEmail];
+    }
+
+    foreach ($cibles as [$identifiant, $type, $seuil]) {
+        $stmt = $pdo->prepare('
+            SELECT tentatives, derniere_tentative FROM limitation_tentatives
+            WHERE contexte = :c AND identifiant = :id AND type = :type
+        ');
+        $stmt->execute(['c' => $contexte, 'id' => $identifiant, 'type' => $type]);
+        $ligne = $stmt->fetch();
+
+        $expire = $ligne && strtotime($ligne['derniere_tentative']) < strtotime("-{$blocageMinutes} minutes");
+        $nouveau = (!$ligne || $expire) ? 1 : ((int) $ligne['tentatives'] + 1);
+        $bloqueJusqua = $nouveau >= $seuil ? date('Y-m-d H:i:s', strtotime("+{$blocageMinutes} minutes")) : null;
+
+        $pdo->prepare('
+            INSERT INTO limitation_tentatives (contexte, identifiant, type, tentatives, derniere_tentative, bloque_jusqua)
+            VALUES (:c, :id, :type, :n1, NOW(), :b1)
+            ON DUPLICATE KEY UPDATE tentatives = :n2, derniere_tentative = NOW(), bloque_jusqua = :b2
+        ')->execute([
+            'c' => $contexte, 'id' => $identifiant, 'type' => $type,
+            'n1' => $nouveau, 'b1' => $bloqueJusqua,
+            'n2' => $nouveau, 'b2' => $bloqueJusqua,
+        ]);
+    }
+}
+
+/** Réinitialise le compteur (IP + e-mail) après une action réussie. */
+function limitation_reinitialiser(string $contexte, ?string $email = null): void
+{
+    $pdo = get_pdo();
+    $pdo->prepare('DELETE FROM limitation_tentatives WHERE contexte = :c AND identifiant = :id AND type = "ip"')
+        ->execute(['c' => $contexte, 'id' => client_ip()]);
+    if ($email) {
+        $pdo->prepare('DELETE FROM limitation_tentatives WHERE contexte = :c AND identifiant = :id AND type = "email"')
+            ->execute(['c' => $contexte, 'id' => mb_strtolower($email)]);
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RÉCUPÉRATION DE MOT DE PASSE
+   ═══════════════════════════════════════════════════════════════ */
+
+/**
+ * Crée un jeton de réinitialisation pour un administrateur (valable 1h)
+ * et invalide les demandes précédentes non utilisées pour ce compte.
+ * Renvoie le jeton EN CLAIR (à mettre dans le lien envoyé par e-mail) —
+ * seul son hachage est conservé en base.
+ */
+function create_password_reset_token(int $adminId): string
+{
+    $token = bin2hex(random_bytes(32));
+    $hash = hash('sha256', $token);
+
+    $pdo = get_pdo();
+    $pdo->prepare('UPDATE reinitialisations_mot_de_passe SET utilise = 1 WHERE admin_id = :id AND utilise = 0')
+        ->execute(['id' => $adminId]);
+
+    $pdo->prepare('
+        INSERT INTO reinitialisations_mot_de_passe (admin_id, token_hash, expire_le)
+        VALUES (:id, :hash, :expire)
+    ')->execute([
+        'id' => $adminId,
+        'hash' => $hash,
+        'expire' => date('Y-m-d H:i:s', strtotime('+1 hour')),
+    ]);
+
+    return $token;
+}
+
+/** Vérifie un jeton reçu par e-mail. Renvoie l'id admin si valide, sinon null. */
+function verifier_token_reinitialisation(string $token): ?int
+{
+    if ($token === '') {
+        return null;
+    }
+    $hash = hash('sha256', $token);
+    $stmt = get_pdo()->prepare('
+        SELECT admin_id FROM reinitialisations_mot_de_passe
+        WHERE token_hash = :hash AND utilise = 0 AND expire_le > NOW()
+        LIMIT 1
+    ');
+    $stmt->execute(['hash' => $hash]);
+    $adminId = $stmt->fetchColumn();
+    return $adminId ? (int) $adminId : null;
+}
+
+/** Marque un jeton comme utilisé, pour qu'il ne serve qu'une seule fois. */
+function consommer_token_reinitialisation(string $token): void
+{
+    $hash = hash('sha256', $token);
+    get_pdo()->prepare('UPDATE reinitialisations_mot_de_passe SET utilise = 1 WHERE token_hash = :hash')
+        ->execute(['hash' => $hash]);
+}
