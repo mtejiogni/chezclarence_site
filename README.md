@@ -164,7 +164,7 @@ Sur la plupart des hébergements, cette étape se fait **depuis le panneau de vo
 
 > En local (WampServer, XAMPP, MAMP...), vous pouvez aussi la créer en une commande :
 > ```bash
-> mysql -u root -p -e "CREATE DATABASE chezclarence_cms CHARACTER SET utf8mb4"
+> mysql -u root -p -e "CREATE DATABASE chezclar_site CHARACTER SET utf8mb4"
 > ```
 
 ### Étape 3 — Renseigner la configuration

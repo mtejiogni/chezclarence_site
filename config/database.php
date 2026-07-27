@@ -22,7 +22,7 @@ function get_pdo(): PDO
 
     $host = env('DB_HOST', '127.0.0.1');
     $port = env('DB_PORT', '3306');
-    $db   = env('DB_DATABASE', 'chezclarence_site');
+    $db   = env('DB_DATABASE', 'chezclar_site');
     $user = env('DB_USERNAME', 'root');
     $pass = env('DB_PASSWORD', '');
 

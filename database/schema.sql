@@ -15,12 +15,12 @@
 --      administrateur (aucun mot de passe n'est pré-rempli dans
 --      ce script, pour des raisons de sécurité).
 -- ══════════════════════════════════════════════════════════════
-DROP DATABASE IF EXISTS chezclarence_site;
+DROP DATABASE IF EXISTS chezclar_site;
 
-CREATE DATABASE chezclarence_site
+CREATE DATABASE chezclar_site
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-USE chezclarence_site;
+USE chezclar_site;
 
 -- Sécurité indispensable : sans cette ligne, un client mysql dont le charset
 -- par défaut n'est pas UTF-8 (ex: certains clients en latin1 par défaut)
