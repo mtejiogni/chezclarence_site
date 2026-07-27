@@ -7,48 +7,57 @@ if (admin_is_logged_in()) {
     exit;
 }
 
+$erreur = null;
 $envoye = false;
-$erreurCsrf = null;
+$emailSaisi = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
-    $email = trim($_POST['email'] ?? '');
+    $emailSaisi = trim($_POST['email'] ?? '');
 
-    // Toujours le même comportement, que l'e-mail existe ou non en base —
-    // ça évite qu'un visiteur puisse deviner quels e-mails sont enregistrés
-    // comme comptes administrateurs simplement en testant cette page.
-    $envoye = true;
+    if (!filter_var($emailSaisi, FILTER_VALIDATE_EMAIL)) {
+        $erreur = 'Adresse e-mail invalide.';
+    } else {
+        $blocage = limitation_est_bloque('reinitialisation', $emailSaisi);
 
-    $blocage = limitation_est_bloque('reinitialisation', $email);
+        if ($blocage !== null) {
+            $erreur = 'Trop de tentatives récentes. Réessayez dans ' . ceil($blocage / 60) . ' minute(s).';
+        } else {
+            $stmt = get_pdo()->prepare('SELECT id, nom FROM administrateurs WHERE email = :email AND actif = 1');
+            $stmt->execute(['email' => $emailSaisi]);
+            $admin = $stmt->fetch();
 
-    if ($blocage === null && filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $stmt = get_pdo()->prepare('SELECT id, nom FROM administrateurs WHERE email = :email AND actif = 1');
-        $stmt->execute(['email' => $email]);
-        $admin = $stmt->fetch();
+            // Comptabilisée pour CET e-mail et cette IP dans tous les cas
+            // (compte trouvé ou non) : c'est ce qui limite un sondage
+            // automatisé de plusieurs adresses, maintenant que la réponse
+            // révèle explicitement si un compte existe.
+            limitation_enregistrer_echec('reinitialisation', $emailSaisi, 3, 8, 60);
 
-        limitation_enregistrer_echec('reinitialisation', $email, 3, 8, 60);
+            if (!$admin) {
+                $erreur = "Aucun compte administrateur actif n'est associé à cette adresse e-mail.";
+            } else {
+                $token = create_password_reset_token((int) $admin['id']);
+                $lien = (!empty($_SERVER['HTTPS']) ? 'https://' : 'http://') . $_SERVER['HTTP_HOST']
+                    . rtrim(dirname($_SERVER['PHP_SELF']), '/') . '/reinitialiser-mot-de-passe.php?token=' . urlencode($token);
 
-        if ($admin) {
-            $token = create_password_reset_token((int) $admin['id']);
-            $lien = (!empty($_SERVER['HTTPS']) ? 'https://' : 'http://') . $_SERVER['HTTP_HOST']
-                . rtrim(dirname($_SERVER['PHP_SELF']), '/') . '/reinitialiser-mot-de-passe.php?token=' . urlencode($token);
-
-            $p = get_parametres();
-            $sujet = 'Réinitialisation de votre mot de passe — ' . $p['nom_restaurant'];
-            $corps = '
-                <div style="font-family:Arial,sans-serif;font-size:15px;color:#111;line-height:1.6;">
-                    <p>Bonjour ' . e($admin['nom']) . ',</p>
-                    <p>Une demande de réinitialisation de mot de passe a été effectuée pour votre compte administrateur du site <strong>' . e($p['nom_restaurant']) . '</strong>.</p>
-                    <p style="margin:24px 0;">
-                        <a href="' . e($lien) . '" style="background:#EA580C;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:bold;display:inline-block;">
-                            Choisir un nouveau mot de passe
-                        </a>
-                    </p>
-                    <p style="color:#666;font-size:13px;">Ce lien est valable 1 heure et ne peut être utilisé qu\'une seule fois.</p>
-                    <p style="color:#666;font-size:13px;">Si vous n\'êtes pas à l\'origine de cette demande, vous pouvez ignorer cet e-mail sans risque : votre mot de passe actuel reste inchangé.</p>
-                </div>
-            ';
-            send_email($email, $sujet, $corps);
+                $p = get_parametres();
+                $sujet = 'Réinitialisation de votre mot de passe — ' . $p['nom_restaurant'];
+                $corps = '
+                    <div style="font-family:Arial,sans-serif;font-size:15px;color:#111;line-height:1.6;">
+                        <p>Bonjour ' . e($admin['nom']) . ',</p>
+                        <p>Une demande de réinitialisation de mot de passe a été effectuée pour votre compte administrateur du site <strong>' . e($p['nom_restaurant']) . '</strong>.</p>
+                        <p style="margin:24px 0;">
+                            <a href="' . e($lien) . '" style="background:#EA580C;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:bold;display:inline-block;">
+                                Choisir un nouveau mot de passe
+                            </a>
+                        </p>
+                        <p style="color:#666;font-size:13px;">Ce lien est valable 1 heure et ne peut être utilisé qu\'une seule fois.</p>
+                        <p style="color:#666;font-size:13px;">Si vous n\'êtes pas à l\'origine de cette demande, vous pouvez ignorer cet e-mail sans risque : votre mot de passe actuel reste inchangé.</p>
+                    </div>
+                ';
+                send_email($emailSaisi, $sujet, $corps);
+                $envoye = true;
+            }
         }
     }
 }
@@ -86,17 +95,23 @@ $p = get_parametres();
           </span>
           <h2 class="font-display text-lg text-ink mb-2">Vérifiez votre boîte mail</h2>
           <p class="text-ink/55 text-sm leading-relaxed">
-            Si cette adresse correspond à un compte actif, un e-mail contenant un lien de réinitialisation vient de vous être envoyé. Le lien est valable 1 heure.
+            Un e-mail contenant un lien de réinitialisation vient d'être envoyé à <strong><?= e($emailSaisi) ?></strong>. Le lien est valable 1 heure.
           </p>
           <p class="text-ink/40 text-xs mt-4">Pensez à vérifier vos courriers indésirables si vous ne le voyez pas d'ici quelques minutes.</p>
         </div>
       <?php else: ?>
+        <?php if ($erreur): ?>
+          <div class="mb-5 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-4 flex items-start gap-2">
+            <i class="fa-solid fa-circle-exclamation mt-0.5 shrink-0"></i> <span><?= e($erreur) ?></span>
+          </div>
+        <?php endif; ?>
+
         <p class="text-ink/55 text-sm mb-5">Indiquez l'adresse e-mail de votre compte administrateur : nous vous enverrons un lien pour choisir un nouveau mot de passe.</p>
         <form method="post" class="space-y-4">
           <?= csrf_field() ?>
           <div>
             <label class="admin-label">Adresse e-mail</label>
-            <input type="email" name="email" required autofocus class="admin-input" placeholder="vous@chezclarence.cm">
+            <input type="email" name="email" required autofocus class="admin-input" placeholder="vous@chezclarence.cm" value="<?= e($emailSaisi) ?>">
           </div>
           <button type="submit" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3.5 rounded-xl transition">
             Envoyer le lien de réinitialisation
