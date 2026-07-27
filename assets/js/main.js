@@ -45,21 +45,28 @@
   /* ── Menu mobile ─────────────────────────────────────────── */
   function initMobileMenu() {
     var burger = document.getElementById('btn-burger');
+    var icon = document.getElementById('btn-burger-icon');
     var menu = document.getElementById('mobile-menu');
     if (!burger || !menu) return;
 
+    function setIcon(open) {
+      if (!icon) return;
+      icon.classList.toggle('fa-bars', !open);
+      icon.classList.toggle('fa-xmark', open);
+    }
+
     function close() {
-      burger.classList.remove('open');
       menu.classList.remove('open');
       burger.setAttribute('aria-expanded', 'false');
+      setIcon(false);
       document.body.classList.remove('overflow-hidden');
     }
 
     burger.addEventListener('click', function () {
       var willOpen = !menu.classList.contains('open');
-      burger.classList.toggle('open', willOpen);
       menu.classList.toggle('open', willOpen);
       burger.setAttribute('aria-expanded', String(willOpen));
+      setIcon(willOpen);
       document.body.classList.toggle('overflow-hidden', willOpen);
     });
 
